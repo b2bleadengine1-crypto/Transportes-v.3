@@ -24,7 +24,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
             GT
           </div>
           <div>
-            <h3 className="text-lg font-bold text-white">Guia de transportes Públicos</h3>
+            <h3 className="text-lg font-bold text-white">Guia de Transportes Públicos</h3>
             <p className="text-xs text-slate-400">Transportes & Carreiras em Tempo Real · Área Metropolitana de Lisboa</p>
           </div>
         </div>

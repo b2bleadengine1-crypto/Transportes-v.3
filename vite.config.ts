@@ -503,7 +503,7 @@ export default defineConfig(() => {
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg', 'routes.json'],
         manifest: {
           id: '/',
-          name: 'Guia de transportes Públicos',
+          name: 'Guia de Transportes Públicos',
           short_name: 'Guia Transportes',
           description: 'Acompanhe todos os transportes públicos em tempo real no mapa interativo com paragens, linhas, metro, comboios e horários.',
           theme_color: '#020617',

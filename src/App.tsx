@@ -1991,7 +1991,7 @@ export default function App() {
         isOpen={activeSheet === 'menu'}
         onClose={() => setActiveSheet('none')}
         title="Menu Principal"
-        subtitle="Guia de transportes Públicos · Em Direto"
+        subtitle="Guia de Transportes Públicos · Em Direto"
         icon={<Bus className="w-5 h-5 text-amber-400" />}
       >
         <div className="space-y-4">

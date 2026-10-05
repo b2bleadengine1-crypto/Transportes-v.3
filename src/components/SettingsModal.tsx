@@ -827,7 +827,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* Footer */}
         <div className="pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-          <span>Guia de transportes Públicos</span>
+          <span>Guia de Transportes Públicos</span>
           <button
             onClick={onClose}
             className="px-4 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-xl transition-colors cursor-pointer"
