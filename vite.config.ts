@@ -617,6 +617,13 @@ export default defineConfig(() => {
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
       proxy: {
+        '/api/linhas': {
+          target: 'https://api.carrismetropolitana.pt/v2/lines',
+          changeOrigin: true,
+          rewrite: () => '',
+          secure: true,
+          timeout: 8000,
+        },
         '/api/metropolitana': {
           target: 'https://api.carrismetropolitana.pt/v2',
           changeOrigin: true,

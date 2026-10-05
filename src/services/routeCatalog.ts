@@ -265,7 +265,7 @@ export async function loadRouteCatalog(): Promise<Map<string, Line>> {
     // Runs in the background without blocking the UI
     setTimeout(async () => {
       try {
-        const proxyApiUrl = '/api/metropolitana/lines';
+        const proxyApiUrl = '/api/linhas';
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 8000);
 
@@ -273,6 +273,13 @@ export async function loadRouteCatalog(): Promise<Map<string, Line>> {
           signal: controller.signal,
           headers: { Accept: 'application/json' },
         }).catch(() => null);
+
+        if (!res || !res.ok) {
+          res = await fetch('/api/metropolitana/lines', {
+            signal: controller.signal,
+            headers: { Accept: 'application/json' },
+          }).catch(() => null);
+        }
 
         if (!res || !res.ok) {
           const directApiUrl = 'https://api.carrismetropolitana.pt/v2/lines';

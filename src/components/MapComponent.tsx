@@ -344,10 +344,11 @@ export const MapComponent: React.FC<MapComponentProps> = ({
       if (onSelectMSTStation) onSelectMSTStation(null);
     });
 
-    const handleDragStart = () => {
+    const handleUserMapInteraction = () => {
       onUserPannedMapRef.current?.();
     };
-    initialMap.on('dragstart', handleDragStart);
+    initialMap.on('dragstart', handleUserMapInteraction);
+    initialMap.on('zoomstart', handleUserMapInteraction);
 
     // Trigger invalidateSize to fix 0-height container issues when mounted in React
     const t1 = setTimeout(() => {
@@ -1184,6 +1185,12 @@ export const MapComponent: React.FC<MapComponentProps> = ({
       try {
         stopsGroup.clearLayers();
 
+        // UX Mandate: Bind visibility of bus stops to zoom > 14 to avoid map cluttering when zoomed out
+        const currentZoom = mapInstanceRef.current.getZoom();
+        if (currentZoom <= 14) {
+          return;
+        }
+
         // Regra do utilizador: as paragens SÓ aparecem se for a dos trajectos dos autocarros selecionados
         // Identifica a linha selecionada pelo utilizador (1 selecionado cancela o anterior)
         const selectedBus = selectedVehicleId ? vehicles.find((v) => v.id === selectedVehicleId) : null;
@@ -1301,12 +1308,14 @@ export const MapComponent: React.FC<MapComponentProps> = ({
 
     renderDirectStops();
 
-    // Re-renderiza as paragens visíveis ao mover ou fazer zoom no mapa
+    // Re-renderiza as paragens visíveis ao mover ou alterar o zoom do mapa
     map.on('moveend', renderDirectStops);
+    map.on('zoomend', renderDirectStops);
 
     return () => {
       isDisposed = true;
       map.off('moveend', renderDirectStops);
+      map.off('zoomend', renderDirectStops);
       if (stopsLayerGroupRef.current) {
         stopsLayerGroupRef.current.clearLayers();
       }

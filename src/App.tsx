@@ -214,6 +214,7 @@ export default function App() {
   const lastRawUserLocRef = useRef<{ lat: number; lon: number } | null>(null);
   const fetchEpochRef = useRef(0);
   const isFetchingVehiclesRef = useRef(false);
+  const lastAutoCenteredLineRef = useRef<string | null>(null);
   const [flyToTarget, setFlyToTarget] = useState<{ coords: [number, number]; zoom: number; timestamp: number } | null>(null);
 
   // Selected bus stop for arrival estimates & full timetables
@@ -808,11 +809,21 @@ export default function App() {
     };
   }, [filteredVehicles]);
 
-  // Generic auto-center when filtering or searching a specific line
+  // Generic auto-center when filtering or searching a specific line (runs once per line change, never during tracking)
   useEffect(() => {
+    // If a vehicle is selected or followed, do not override camera zoom
+    if (selectedVehicleId) return;
+
     const q = searchQuery.trim().toLowerCase();
     const targetLine = selectedLineFilter || (q.length >= 3 && linesMap.has(q) ? q : null);
-    if (!targetLine) return;
+    if (!targetLine) {
+      lastAutoCenteredLineRef.current = null;
+      return;
+    }
+
+    // Only auto-center once when the user chooses a new line, avoiding zoom reset on every 3s telemetry update
+    if (lastAutoCenteredLineRef.current === targetLine) return;
+    lastAutoCenteredLineRef.current = targetLine;
 
     const matchingBuses = allVehicles.filter((v) => v.line_id.toLowerCase() === targetLine.toLowerCase() && v.lat && v.lon);
     if (matchingBuses.length > 0) {
@@ -828,7 +839,7 @@ export default function App() {
         timestamp: Date.now(),
       });
     }
-  }, [searchQuery, selectedLineFilter, allVehicles, linesMap]);
+  }, [searchQuery, selectedLineFilter, allVehicles, linesMap, selectedVehicleId]);
 
   // Unified Continuous Live GPS Engine & Proximity Alert Watcher
   useEffect(() => {
@@ -1341,6 +1352,9 @@ export default function App() {
           followVehicle={followVehicle}
           followUser={followUser}
           onUserPannedMap={() => {
+            if (followVehicle) {
+              setFollowVehicle(false);
+            }
             if (followUser) {
               setFollowUser(false);
               setGpsFeedbackToast('Seguimento de câmara pausado');
