@@ -776,7 +776,34 @@ export async function fetchStopsMap(): Promise<Map<string, StopInfo>> {
 
       return map;
     } catch (err) {
-      console.warn('Erro ao obter paragens da Carris Metropolitana:', err);
+      console.warn('Erro ao obter paragens da Carris Metropolitana via API, a tentar fallback local/público:', err);
+
+      // Tenta fallback para /stops.json usando resolução adaptativa de caminhos públicos
+      try {
+        const publicStops = await fetchPublicJson<any[]>('stops.json');
+        if (Array.isArray(publicStops) && publicStops.length > 0) {
+          const map = new Map<string, StopInfo>();
+          for (const s of publicStops) {
+            if (s && s.id) {
+              const linesList: string[] = Array.isArray(s.line_ids) ? s.line_ids : [];
+              map.set(s.id, {
+                id: s.id,
+                name: s.long_name || s.tts_name || s.short_name || `Paragem #${s.id}`,
+                lat: s.lat || 0,
+                lon: s.lon || 0,
+                lines: linesList,
+                line_ids: linesList,
+                pattern_ids: s.pattern_ids || [],
+                route_ids: s.route_ids || [],
+              });
+            }
+          }
+          for (const s of MOBICASCAIS_STOPS) map.set(s.id, s);
+          cachedStopsMap = map;
+          return map;
+        }
+      } catch {}
+
       if (cachedStopsMap && cachedStopsMap.size > 0) return cachedStopsMap;
 
       const fallbackMap = new Map<string, StopInfo>();

@@ -17,6 +17,7 @@ import {
 import { MOBICASCAIS_STOPS, getMobiCascaisRouteStops } from '../services/mobiCascais';
 import { BoatStation, BoatVehicle, BOAT_STATIONS, BOAT_LINES, getLiveBoats } from '../services/transtejoSoflusa';
 import { MSTStation, MSTVehicle, MST_STATIONS, MST_LINES, getLiveMSTVehicles } from '../services/metroSulTejo';
+import { useDeviceHardware } from '../hooks/useDeviceHardware';
 
 interface MapComponentProps {
   vehicles: Vehicle[];
@@ -226,6 +227,7 @@ export const MapComponent: React.FC<MapComponentProps> = ({
   selectedMSTLine,
   selectedDirection,
 }) => {
+  const hardwareProfile = useDeviceHardware();
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
@@ -270,8 +272,9 @@ export const MapComponent: React.FC<MapComponentProps> = ({
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
 
-    // Initialize Leaflet map with zoom protection settings
+    // Initialize Leaflet map with global canvas rendering for maximum mobile performance
     const initialMap = L.map(mapContainerRef.current, {
+      preferCanvas: true, // Forces Leaflet to draw vector layers on a single <canvas> element instead of expensive SVG/DOM elements
       center: [38.7369, -9.1426], // Lisbon center
       zoom: 11,
       minZoom: 8,
@@ -368,7 +371,8 @@ export const MapComponent: React.FC<MapComponentProps> = ({
       clearTimeout(t1);
       clearTimeout(t2);
       window.removeEventListener('resize', onResize);
-      initialMap.off('dragstart', handleDragStart);
+      initialMap.off('dragstart', handleUserMapInteraction);
+      initialMap.off('zoomstart', handleUserMapInteraction);
       if (heatmapLayerGroupRef.current) heatmapLayerGroupRef.current.clearLayers();
       if (routeLinesGroupRef.current) routeLinesGroupRef.current.clearLayers();
       if (stopsLayerGroupRef.current) stopsLayerGroupRef.current.clearLayers();
@@ -1185,10 +1189,15 @@ export const MapComponent: React.FC<MapComponentProps> = ({
       try {
         stopsGroup.clearLayers();
 
-        // UX Mandate: Bind visibility of bus stops to zoom > 14 to avoid map cluttering when zoomed out
         const currentZoom = mapInstanceRef.current.getZoom();
-        if (currentZoom <= 14) {
+        // Smart Zoom Visibility: Hide stops completely if zoom is less than 14.5
+        if (currentZoom < 14.5) {
           return;
+        }
+
+        // Initialize reusable Leaflet Canvas renderer
+        if (!canvasRendererRef.current) {
+          canvasRendererRef.current = L.canvas({ padding: 0.5 });
         }
 
         // Regra do utilizador: as paragens SÓ aparecem se for a dos trajectos dos autocarros selecionados
@@ -1243,61 +1252,26 @@ export const MapComponent: React.FC<MapComponentProps> = ({
           if (!belongsToSelectedBus) continue;
 
           const isSelected = stop.id === selectedStopId;
+          const stopColor = isMobi ? '#009fe3' : '#eab308';
 
-          const stopIcon = L.divIcon({
-            className: 'cm-custom-stop-marker',
-            html: `
-              <div class="relative flex flex-col items-center justify-center cursor-pointer group ${isSelected ? 'scale-125 z-50' : 'hover:scale-115'} transition-all duration-150">
-                ${isSelected ? `
-                  <div class="absolute -inset-2 rounded-full ${isMobi ? 'bg-cyan-400/60' : 'bg-amber-400/60'} animate-ping pointer-events-none"></div>
-                ` : `
-                  <!-- Auréola luminosa suave para destacar das bombas de combustível e POIs vizinhos -->
-                  <div class="absolute -inset-1 rounded-full ${isMobi ? 'bg-cyan-400/40' : 'bg-amber-400/40'} blur-[3px] pointer-events-none"></div>
-                `}
-                <div 
-                  class="w-7 h-7 rounded-full flex items-center justify-center shadow-2xl border-[2.5px] border-white ring-2 ${
-                    isSelected 
-                      ? isMobi ? 'ring-cyan-300 shadow-cyan-400/80' : 'ring-amber-300 shadow-amber-400/80'
-                      : 'ring-slate-950/80 shadow-black/90'
-                  } relative z-10"
-                  style="background-color: ${isMobi ? '#009FE3' : '#FFC600'};"
-                >
-                  <!-- Ícone Oficial de Paragem de Autocarro -->
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="${isMobi ? '#ffffff' : '#0f172a'}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M4 6h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"/>
-                    <path d="M2 12h20"/>
-                    <path d="M6 18v2"/>
-                    <path d="M18 18v2"/>
-                    <circle cx="7" cy="15" r="1" fill="${isMobi ? '#ffffff' : '#0f172a'}"/>
-                    <circle cx="17" cy="15" r="1" fill="${isMobi ? '#ffffff' : '#0f172a'}"/>
-                  </svg>
-                </div>
-                <!-- Ponta inferior do pino de paragem -->
-                <div class="w-2 h-2 rotate-45 -mt-1 bg-white border-r border-b border-slate-900/60 shadow-md relative z-10"></div>
-              </div>
-            `,
-            iconSize: isSelected ? [32, 34] : [28, 30],
-            iconAnchor: isSelected ? [16, 32] : [14, 28],
-            popupAnchor: [0, -28],
-          });
-
-          const marker = L.marker([stop.lat, stop.lon], {
-            icon: stopIcon,
-            zIndexOffset: isSelected ? 3500 : 850,
+          // Canvas-based circleMarker (Zero DOM elements, drawn directly onto Leaflet's single <canvas> element)
+          const circle = L.circleMarker([stop.lat, stop.lon], {
+            renderer: canvasRendererRef.current!,
+            radius: isSelected ? 7 : 5,
+            color: isSelected ? '#ffffff' : stopColor,
+            weight: isSelected ? 2.5 : 1.5,
+            fillColor: stopColor,
+            fillOpacity: isSelected ? 1 : 0.8,
           }).addTo(stopsGroup);
 
-          marker.bindTooltip(
-            `<div class="p-1.5 text-xs text-white max-w-[200px]">
-              <strong class="${isSelected ? 'text-amber-300' : isMobi ? 'text-cyan-300' : 'text-amber-300'} block font-bold">${stop.name}</strong>
-              <div class="flex items-center justify-between text-slate-400 font-mono text-[10px] mt-0.5">
-                <span>#${stop.id}</span>
-                <span class="${isMobi ? 'text-cyan-400' : 'text-amber-400'} font-sans font-semibold">Ver horários &rarr;</span>
-              </div>
+          circle.bindTooltip(
+            `<div class="p-1 text-xs text-white">
+              <strong class="${isMobi ? 'text-cyan-300' : 'text-amber-300'}">${stop.name}</strong> <span class="text-slate-400 font-mono text-[10px]">#${stop.id}</span>
             </div>`,
-            { direction: 'top', className: 'cm-leaflet-popup-custom' }
+            { direction: 'top', offset: [0, -6], className: 'cm-leaflet-tooltip-clean' }
           );
 
-          marker.on('click', () => {
+          circle.on('click', () => {
             if (onSelectStop) onSelectStop(stop.id);
           });
         }
