@@ -698,34 +698,64 @@ export function cleanCmId(id?: string | null): string {
 let cachedStopsMap: Map<string, StopInfo> | null = null;
 let stopsFetchPromise: Promise<Map<string, StopInfo>> | null = null;
 
-export async function fetchStopsMap(): Promise<Map<string, StopInfo>> {
-  if (cachedStopsMap) return cachedStopsMap;
-  if (stopsFetchPromise) return stopsFetchPromise;
+export async function fetchStopsMap(forceRefresh = false): Promise<Map<string, StopInfo>> {
+  if (!forceRefresh && cachedStopsMap && cachedStopsMap.size > 0) {
+    return cachedStopsMap;
+  }
+  if (stopsFetchPromise) {
+    return stopsFetchPromise;
+  }
 
-  // Tenta carregar da cache local persistente para carregamento instantâneo (0ms)
+  // Clear stale cached map on forced refresh
+  if (forceRefresh) {
+    cachedStopsMap = null;
+  }
+
+  // Remove any legacy local storage cache that may contain obsolete stop coordinates
   try {
-    const local = localStorage.getItem('cm_stops_cache_v2');
-    if (local) {
-      const parsed = JSON.parse(local);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        const localMap = new Map<string, StopInfo>();
-        for (const s of parsed) {
-          localMap.set(s.id, s);
-        }
-        // Assegura sempre a presença de todas as paragens municipais MobiCascais
-        for (const ms of MOBICASCAIS_STOPS) {
-          localMap.set(ms.id, ms);
-        }
-        cachedStopsMap = localMap;
-      }
-    }
+    localStorage.removeItem('cm_stops_cache_v2');
+    localStorage.removeItem('cm_stops_cache');
   } catch {}
 
   stopsFetchPromise = (async () => {
     try {
-      const rawStops = await fetchCmApiJson<any[]>('/stops');
+      // 1. Fetch live stops directly with aggressive cache-busting (?_t=timestamp + no-cache headers)
+      const base = getApiBaseUrl();
+      const timestamp = Date.now();
+      const liveEndpoint = `${base}/stops?_t=${timestamp}`;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+      const res = await fetch(liveEndpoint, {
+        signal: controller.signal,
+        headers: {
+          Accept: 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+        },
+      });
+      clearTimeout(timeoutId);
+
+      let rawStops: any[] = [];
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        rawStops = await res.json();
+      } else {
+        // Fallback to direct official endpoint with cache buster if proxy is unavailable
+        const directUrl = `https://api.carrismetropolitana.pt/v2/stops?_t=${timestamp}`;
+        const directRes = await fetch(directUrl, {
+          headers: {
+            Accept: 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+          },
+        });
+        if (directRes.ok) {
+          rawStops = await directRes.json();
+        }
+      }
+
       const map = new Map<string, StopInfo>();
-      const stopsArray: StopInfo[] = [];
 
       if (Array.isArray(rawStops)) {
         for (const s of rawStops) {
@@ -734,96 +764,38 @@ export async function fetchStopsMap(): Promise<Map<string, StopInfo>> {
             const item: StopInfo = {
               id: s.id,
               name: s.long_name || s.tts_name || s.short_name || `Paragem #${s.id}`,
-              lat: s.lat || 0,
-              lon: s.lon || 0,
+              lat: Number(s.lat) || 0,
+              lon: Number(s.lon) || 0,
               lines: linesList,
               line_ids: linesList,
               pattern_ids: s.pattern_ids || [],
               route_ids: s.route_ids || [],
             };
             map.set(s.id, item);
-            stopsArray.push(item);
           }
         }
       }
 
-      // Add stops for line 753 (Centro Sul - Praça José Fontana)
-      const stops753: StopInfo[] = [
-        { id: '753_CS', name: 'Centro Sul (Terminal)', lat: 38.6756, lon: -9.1670, lines: ['753'], line_ids: ['753'] },
-        { id: '753_PT', name: 'Portagem (Ponte 25 de Abril)', lat: 38.6865, lon: -9.1730, lines: ['753'], line_ids: ['753'] },
-        { id: '753_AM', name: 'Amoreiras (Av. Eng. Duarte Pacheco)', lat: 38.7242, lon: -9.1605, lines: ['753'], line_ids: ['753'] },
-        { id: '753_MP', name: 'Marquês de Pombal (Metro)', lat: 38.7258, lon: -9.1502, lines: ['753'], line_ids: ['753'] },
-        { id: '753_PC', name: 'Picoas (Av. Fontes Pereira de Melo)', lat: 38.7298, lon: -9.1468, lines: ['753'], line_ids: ['753'] },
-        { id: '753_JF', name: 'Praça José Fontana (Terminal)', lat: 38.7308, lon: -9.1432, lines: ['753'], line_ids: ['753'] },
-      ];
-      for (const s of stops753) {
-        map.set(s.id, s);
-        stopsArray.push(s);
-      }
-
-      // Add MobiCascais municipal stops
-      for (const s of MOBICASCAIS_STOPS) {
-        map.set(s.id, s);
-        stopsArray.push(s);
+      // Add MobiCascais municipal stops with authoritative current coordinates
+      for (const ms of MOBICASCAIS_STOPS) {
+        map.set(ms.id, ms);
       }
 
       cachedStopsMap = map;
-
-      // Guarda na cache local de forma assíncrona para arranques futuros ultra-rápidos
-      try {
-        localStorage.setItem('cm_stops_cache_v2', JSON.stringify(stopsArray));
-      } catch {}
-
       return map;
     } catch (err) {
-      console.warn('Erro ao obter paragens da Carris Metropolitana via API, a tentar fallback local/público:', err);
-
-      // Tenta fallback para /stops.json usando resolução adaptativa de caminhos públicos
-      try {
-        const publicStops = await fetchPublicJson<any[]>('stops.json');
-        if (Array.isArray(publicStops) && publicStops.length > 0) {
-          const map = new Map<string, StopInfo>();
-          for (const s of publicStops) {
-            if (s && s.id) {
-              const linesList: string[] = Array.isArray(s.line_ids) ? s.line_ids : [];
-              map.set(s.id, {
-                id: s.id,
-                name: s.long_name || s.tts_name || s.short_name || `Paragem #${s.id}`,
-                lat: s.lat || 0,
-                lon: s.lon || 0,
-                lines: linesList,
-                line_ids: linesList,
-                pattern_ids: s.pattern_ids || [],
-                route_ids: s.route_ids || [],
-              });
-            }
-          }
-          for (const s of MOBICASCAIS_STOPS) map.set(s.id, s);
-          cachedStopsMap = map;
-          return map;
-        }
-      } catch {}
-
+      console.warn('[StopsAPI] Erro ao obter paragens em tempo real da Carris Metropolitana:', err);
       if (cachedStopsMap && cachedStopsMap.size > 0) return cachedStopsMap;
 
       const fallbackMap = new Map<string, StopInfo>();
-      const stops753: StopInfo[] = [
-        { id: '753_CS', name: 'Centro Sul (Terminal)', lat: 38.6756, lon: -9.1670, lines: ['753'], line_ids: ['753'] },
-        { id: '753_PT', name: 'Portagem (Ponte 25 de Abril)', lat: 38.6865, lon: -9.1730, lines: ['753'], line_ids: ['753'] },
-        { id: '753_AM', name: 'Amoreiras (Av. Eng. Duarte Pacheco)', lat: 38.7242, lon: -9.1605, lines: ['753'], line_ids: ['753'] },
-        { id: '753_MP', name: 'Marquês de Pombal (Metro)', lat: 38.7258, lon: -9.1502, lines: ['753'], line_ids: ['753'] },
-        { id: '753_PC', name: 'Picoas (Av. Fontes Pereira de Melo)', lat: 38.7298, lon: -9.1468, lines: ['753'], line_ids: ['753'] },
-        { id: '753_JF', name: 'Praça José Fontana (Terminal)', lat: 38.7308, lon: -9.1432, lines: ['753'], line_ids: ['753'] },
-      ];
-      for (const s of stops753) fallbackMap.set(s.id, s);
-      for (const s of MOBICASCAIS_STOPS) fallbackMap.set(s.id, s);
+      for (const ms of MOBICASCAIS_STOPS) fallbackMap.set(ms.id, ms);
       return fallbackMap;
     } finally {
       stopsFetchPromise = null;
     }
   })();
 
-  return cachedStopsMap ? Promise.resolve(cachedStopsMap) : stopsFetchPromise;
+  return stopsFetchPromise;
 }
 
 const patternCache = new Map<string, { stop_id: string; stop_sequence: number }[]>();
