@@ -1,6 +1,13 @@
 import { Vehicle, Line, AreaInfo, AreaFilter, CardValidationsData, ServiceAlert, StopInfo } from '../types';
 import GtfsRealtimeBindings from 'gtfs-realtime-bindings';
 import {
+  loadRouteCatalog,
+  resolvePublicAssetUrl,
+  fetchPublicJson,
+  CARRIS_LISBOA_LINES,
+  CP_LINE_DEFS,
+} from './routeCatalog';
+import {
   fetchMobiCascaisRealVehicles,
   getMobiCascaisLinesMap,
   MOBICASCAIS_STOPS,
@@ -40,6 +47,9 @@ export {
   resolveTelemetryUrl,
   isPlaceholderOrInvalidUrl,
   fetchRouteTelemetry,
+  loadRouteCatalog,
+  resolvePublicAssetUrl,
+  fetchPublicJson,
   setMobiCascaisRequested,
   getMobiCascaisRequested,
   setCpRequested,
@@ -549,92 +559,7 @@ let cachedLinesMap: Map<string, Line> | null = null;
 let lineFetchPromise: Promise<Map<string, Line>> | null = null;
 
 export async function fetchLinesMap(): Promise<Map<string, Line>> {
-  if (cachedLinesMap) {
-    return cachedLinesMap;
-  }
-  if (lineFetchPromise) {
-    return lineFetchPromise;
-  }
-
-  lineFetchPromise = (async () => {
-    try {
-      const lines = await fetchCmApiJson<Line[]>('/lines');
-      const map = new Map<string, Line>();
-      if (Array.isArray(lines)) {
-        for (const line of lines) {
-          map.set(line.id, line);
-          if (line.short_name && !map.has(line.short_name)) {
-            map.set(line.short_name, line);
-          }
-        }
-      }
-
-      // Add Carris Lisboa official lines (735, 797, 708, 717, 736, 746, 753, 28E, 15E, etc.)
-      const carrisLisboaDefs: Line[] = [
-        { id: '753', short_name: '753', long_name: 'Centro Sul - Praça José Fontana', color: '#FFC600', text_color: '#000000', pattern_ids: ['753_0_1', '753_1_1'], route_ids: ['753_0', '753_1'] },
-        { id: '735', short_name: '735', long_name: 'Cais do Sodré - Hospital Santa Maria', color: '#FFC600', text_color: '#000000', pattern_ids: ['735_0_1'], route_ids: ['735_0'] },
-        { id: '797', short_name: '797', long_name: 'Sapadores - Areeiro', color: '#FFC600', text_color: '#000000', pattern_ids: ['797_0_1'], route_ids: ['797_0'] },
-        { id: '708', short_name: '708', long_name: 'Martim Moniz - Parque das Nações Norte', color: '#FFC600', text_color: '#000000', pattern_ids: ['708_0_1'], route_ids: ['708_0'] },
-        { id: '717', short_name: '717', long_name: 'Praça do Chile - Fetais', color: '#FFC600', text_color: '#000000', pattern_ids: ['717_0_1'], route_ids: ['717_0'] },
-        { id: '736', short_name: '736', long_name: 'Cais do Sodré - Odivelas', color: '#FFC600', text_color: '#000000', pattern_ids: ['736_0_1'], route_ids: ['736_0'] },
-        { id: '746', short_name: '746', long_name: 'Marquês de Pombal - Estação Damaia', color: '#FFC600', text_color: '#000000', pattern_ids: ['746_0_1'], route_ids: ['746_0'] },
-        { id: '723', short_name: '723', long_name: 'Desterro - Algés', color: '#FFC600', text_color: '#000000', pattern_ids: ['723_0_1'], route_ids: ['723_0'] },
-        { id: '727', short_name: '727', long_name: 'Estação Roma-Areeiro - Restelo', color: '#FFC600', text_color: '#000000', pattern_ids: ['727_0_1'], route_ids: ['727_0'] },
-        { id: '734', short_name: '734', long_name: 'Martim Moniz - Santa Apolónia', color: '#FFC600', text_color: '#000000', pattern_ids: ['734_0_1'], route_ids: ['734_0'] },
-        { id: '751', short_name: '751', long_name: 'Estação Campolide - Linda-a-Velha', color: '#FFC600', text_color: '#000000', pattern_ids: ['751_0_1'], route_ids: ['751_0'] },
-        { id: '702', short_name: '702', long_name: 'Marquês de Pombal - Serafina', color: '#FFC600', text_color: '#000000', pattern_ids: ['702_0_1'], route_ids: ['702_0'] },
-        { id: '759', short_name: '759', long_name: 'Restauradores - Estação Oriente', color: '#FFC600', text_color: '#000000', pattern_ids: ['759_0_1'], route_ids: ['759_0'] },
-        { id: '774', short_name: '774', long_name: 'Campo de Ourique - Gomes Freire', color: '#FFC600', text_color: '#000000', pattern_ids: ['774_0_1'], route_ids: ['774_0'] },
-        { id: '28E', short_name: '28E', long_name: 'Elétrico 28E: Martim Moniz - Campo de Ourique (Prazeres)', color: '#FFC600', text_color: '#000000', pattern_ids: ['28E_0_1'], route_ids: ['28E_0'] },
-        { id: '15E', short_name: '15E', long_name: 'Elétrico 15E: Praça da Figueira - Algés', color: '#FFC600', text_color: '#000000', pattern_ids: ['15E_0_1'], route_ids: ['15E_0'] },
-        { id: '12E', short_name: '12E', long_name: 'Elétrico 12E: Praça da Figueira - Martim Moniz (Circular)', color: '#FFC600', text_color: '#000000', pattern_ids: ['12E_0_1'], route_ids: ['12E_0'] },
-        { id: '24E', short_name: '24E', long_name: 'Elétrico 24E: Praça Luís de Camões - Campolide', color: '#FFC600', text_color: '#000000', pattern_ids: ['24E_0_1'], route_ids: ['24E_0'] },
-      ];
-      for (const cl of carrisLisboaDefs) {
-        map.set(cl.id, cl);
-      }
-
-      // Add Comboios de Portugal (CP) lines
-      const cpLineDefs: Line[] = [
-        { id: 'CP_CASCAIS', short_name: 'CP Cascais', long_name: 'Linha de Cascais (Cais do Sodré ↔ Cascais)', color: '#006633', text_color: '#FFFFFF', pattern_ids: ['cp_cascais_1'], route_ids: ['cp_cascais'] },
-        { id: 'CP_SINTRA', short_name: 'CP Sintra', long_name: 'Linha de Sintra (Sintra ↔ Rossio / Oriente)', color: '#008542', text_color: '#FFFFFF', pattern_ids: ['cp_sintra_1'], route_ids: ['cp_sintra'] },
-        { id: 'CP_AZAMBUJA', short_name: 'CP Azambuja', long_name: 'Linha de Azambuja (Santa Apolónia / Sintra ↔ Azambuja)', color: '#004d26', text_color: '#FFFFFF', pattern_ids: ['cp_azambuja_1'], route_ids: ['cp_azambuja'] },
-        { id: 'CP_SADO', short_name: 'CP Sado', long_name: 'Linha do Sado (Barreiro ↔ Praias do Sado-A)', color: '#00a651', text_color: '#FFFFFF', pattern_ids: ['cp_sado_1'], route_ids: ['cp_sado'] },
-      ];
-      for (const cp of cpLineDefs) {
-        map.set(cp.id, cp);
-        map.set(cp.short_name, cp);
-      }
-
-      // Add MobiCascais municipal lines (M01 to M44)
-      const mobiLines = getMobiCascaisLinesMap();
-      mobiLines.forEach((line, key) => {
-        if (!map.has(key)) {
-          map.set(key, line);
-        }
-      });
-
-      cachedLinesMap = map;
-      return map;
-    } catch (err) {
-      console.warn('Erro ao carregar detalhes das linhas da Carris Metropolitana:', err);
-      const fallbackMap = new Map<string, Line>();
-      const mobiLines = getMobiCascaisLinesMap();
-      mobiLines.forEach((l, k) => fallbackMap.set(k, l));
-      fallbackMap.set('753', {
-        id: '753',
-        short_name: '753',
-        long_name: 'Centro Sul - Praça José Fontana',
-        color: '#FFC600',
-        text_color: '#000000',
-        pattern_ids: ['753_0_1', '753_1_1'],
-        route_ids: ['753_0', '753_1'],
-      });
-      return fallbackMap;
-    }
-  })();
-
-  return lineFetchPromise;
+  return await loadRouteCatalog();
 }
 
 export function isCarrisLisboaLine(lineId: string): boolean {

@@ -472,8 +472,18 @@ export const LineSelectorModal: React.FC<LineSelectorModalProps> = ({
             <>
               {filteredLines.length === 0 ? (
                 <div className="text-center py-10 text-slate-400 text-xs">
-                  <p className="font-semibold text-slate-300">Nenhuma carreira encontrada.</p>
-                  <p className="text-slate-500 mt-1">Tente pesquisar por outro número ou área.</p>
+                  {linesMap.size === 0 ? (
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <div className="w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
+                      <p className="font-semibold text-slate-300">A carregar catálogo de carreiras...</p>
+                      <p className="text-slate-500 text-[11px]">A sincronizar linhas e paragens da AML</p>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="font-semibold text-slate-300">Nenhuma carreira encontrada.</p>
+                      <p className="text-slate-500 mt-1">Tente pesquisar por outro número ou área.</p>
+                    </>
+                  )}
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">

@@ -500,7 +500,7 @@ export default defineConfig(() => {
       transitServerGatewayPlugin(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg'],
+        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg', 'routes.json'],
         manifest: {
           id: '/',
           name: 'Guia de transportes Públicos',
@@ -535,8 +535,23 @@ export default defineConfig(() => {
         },
         workbox: {
           maximumFileSizeToCacheInBytes: 6 * 1024 * 1024, // 6 MiB limit to precache the bundle
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,json}'],
           runtimeCaching: [
+            {
+              // Local static JSON catalogs (e.g. routes.json, schedules)
+              urlPattern: /.*routes\.json$/i,
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'transit-catalogs-cache',
+                expiration: {
+                  maxEntries: 10,
+                  maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
             {
               // OpenStreetMap Map Tiles Cache (CacheFirst with 60-day persistence for complete AML offline coverage)
               urlPattern: /^https:\/\/[abc]\.tile\.openstreetmap\.org\/.*/i,
