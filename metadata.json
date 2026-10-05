@@ -1,0 +1,10 @@
+{
+  "name": " Autocarros em Tempo Real - Carris Metropolitana v3",
+  "description": "Acompanhe todos os autocarros da Carris Metropolitana e da Grande Lisboa em tempo real no mapa interativo com paragens, linhas e horários.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

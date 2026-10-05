@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#020617"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="busBody" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+    <linearGradient id="windowGlow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+
+  <!-- Subtle grid/accent ring -->
+  <circle cx="256" cy="256" r="210" fill="none" stroke="#f59e0b" stroke-opacity="0.15" stroke-width="4" stroke-dasharray="12 12"/>
+
+  <!-- Bus Group with Drop Shadow -->
+  <g filter="url(#shadow)" transform="translate(0, -6)">
+    <!-- Main Bus Chassis -->
+    <rect x="136" y="112" width="240" height="272" rx="44" fill="url(#busBody)"/>
+    
+    <!-- Roof outline & Destination Screen -->
+    <rect x="176" y="132" width="160" height="32" rx="10" fill="#0f172a"/>
+    <text x="256" y="154" fill="#38bdf8" font-family="monospace, sans-serif" font-weight="900" font-size="18" text-anchor="middle" letter-spacing="3">753 LIVE</text>
+
+    <!-- Windshield -->
+    <rect x="156" y="178" width="200" height="96" rx="20" fill="url(#windowGlow)"/>
+    <!-- Windshield Reflection -->
+    <path d="M 170 190 L 230 190 L 190 260 L 165 260 Z" fill="#ffffff" fill-opacity="0.25"/>
+
+    <!-- Headlights -->
+    <circle cx="176" cy="336" r="18" fill="#ffffff"/>
+    <circle cx="176" cy="336" r="12" fill="#fef08a"/>
+    <circle cx="336" cy="336" r="18" fill="#ffffff"/>
+    <circle cx="336" cy="336" r="12" fill="#fef08a"/>
+
+    <!-- Front Grille / Carris Badge -->
+    <rect x="220" y="326" width="72" height="20" rx="8" fill="#0f172a"/>
+    <circle cx="256" cy="336" r="5" fill="#f59e0b"/>
+
+    <!-- Front Bumper -->
+    <rect x="146" y="374" width="220" height="18" rx="9" fill="#0f172a"/>
+
+    <!-- Wheels -->
+    <rect x="146" y="386" width="36" height="32" rx="10" fill="#1e293b"/>
+    <rect x="330" y="386" width="36" height="32" rx="10" fill="#1e293b"/>
+  </g>
+</svg>

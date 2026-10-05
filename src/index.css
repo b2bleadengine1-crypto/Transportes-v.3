@@ -1,0 +1,457 @@
+@import "tailwindcss";
+
+@layer base {
+  * {
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  html, body, #root {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: pan-x pan-y;
+    user-select: none;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    background-color: #0f172a;
+    color: #f8fafc;
+  }
+
+  .font-mono, .tabular-nums {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Explicit Fullscreen Map Canvas */
+#meuMapa {
+  width: 100% !important;
+  height: 100% !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 1 !important;
+}
+
+/* Leaflet Container and Controls Styling */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  background-color: #0b0f19 !important;
+  font-family: 'Plus Jakarta Sans', sans-serif !important;
+}
+
+.leaflet-control-zoom {
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5) !important;
+}
+
+.leaflet-control-zoom a {
+  background-color: rgba(15, 23, 42, 0.9) !important;
+  backdrop-filter: blur(8px);
+  color: #f8fafc !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+  transition: all 0.15s ease;
+}
+
+.leaflet-control-zoom a:hover {
+  background-color: #1e293b !important;
+  color: #fbbf24 !important;
+}
+
+.leaflet-control-attribution {
+  background-color: rgba(15, 23, 42, 0.75) !important;
+  backdrop-filter: blur(4px);
+  color: #94a3b8 !important;
+  font-size: 10px !important;
+  padding: 3px 8px !important;
+  border-radius: 6px 0 0 0 !important;
+}
+
+.leaflet-control-attribution a {
+  color: #e2e8f0 !important;
+  text-decoration: underline;
+}
+
+/* Leaflet Popup Overrides */
+.leaflet-popup-content-wrapper {
+  background-color: rgba(15, 23, 42, 0.95) !important;
+  backdrop-filter: blur(12px);
+  color: #f8fafc !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 20px 30px -10px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05) !important;
+  padding: 0 !important;
+}
+
+.leaflet-popup-content {
+  margin: 0 !important;
+  line-height: 1.4 !important;
+}
+
+.leaflet-popup-tip {
+  background-color: rgba(15, 23, 42, 0.95) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-top-color: transparent !important;
+  border-left-color: transparent !important;
+}
+
+.leaflet-popup-close-button {
+  color: #94a3b8 !important;
+  padding: 8px !important;
+}
+
+.leaflet-popup-close-button:hover {
+  color: #ffffff !important;
+}
+
+/* Smooth Real-Time GPS Marker Transition */
+.leaflet-marker-pane .leaflet-marker-icon.live-bus-marker-container,
+.leaflet-marker-pane .leaflet-marker-icon.cm-bus-dot-marker {
+  transition: transform 0.85s cubic-bezier(0.25, 0.1, 0.25, 1) !important;
+}
+
+/* Disable transition during Leaflet zoom animations to avoid visual glitches */
+.leaflet-zoom-anim .leaflet-marker-pane .leaflet-marker-icon,
+.leaflet-zooming .leaflet-marker-pane .leaflet-marker-icon {
+  transition: none !important;
+}
+
+/* Custom Marker Styling */
+.cm-bus-marker-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transform-origin: center center;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+/* Prevent marker transition conflicts during Leaflet zoom animation */
+.leaflet-zoom-anim .cm-bus-marker-wrapper,
+.leaflet-zooming .cm-bus-marker-wrapper {
+  transition: none !important;
+  will-change: auto !important;
+}
+
+.cm-bus-marker-wrapper:hover {
+  transform: scale(1.18);
+  z-index: 1000 !important;
+}
+
+.cm-bus-marker-selected {
+  transform: scale(1.28);
+  z-index: 2000 !important;
+}
+
+.cm-bus-marker-inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), 0 0 0 1.5px rgba(255, 255, 255, 0.9);
+  padding: 2px 6px;
+  min-width: 38px;
+  height: 24px;
+  white-space: nowrap;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: -0.02em;
+}
+
+.cm-bus-bearing-arrow {
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  width: 0;
+  height: 0;
+  transform: translateX(-50%);
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 7px solid #ffffff;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.4));
+}
+
+.cm-pulse-ring {
+  position: absolute;
+  inset: -5px;
+  border-radius: 14px;
+  animation: cm-pulse 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
+@keyframes cm-pulse {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.9;
+  }
+  70% {
+    transform: scale(1.45);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+/* Scrollbar styles */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Route Lines & Stops Custom Styling */
+.cm-stop-marker {
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+.cm-stop-marker:hover {
+  transform: scale(1.35);
+  filter: drop-shadow(0 0 6px rgba(2, 132, 199, 0.8));
+}
+
+.cm-traffic-pulse {
+  animation: cm-traffic-breathe 2.2s infinite ease-in-out;
+}
+
+@keyframes cm-traffic-breathe {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.65;
+    transform: scale(1.15);
+  }
+}
+
+/* Bus delay alert badge styling */
+.cm-bus-delay-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 17px;
+  height: 17px;
+  background-color: #ef4444;
+  color: #ffffff;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid #ffffff;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.9), 0 2px 4px rgba(0, 0, 0, 0.5);
+  z-index: 30;
+  animation: cm-delay-pulse 1.8s infinite ease-in-out;
+}
+
+@keyframes cm-delay-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.8);
+  }
+  50% {
+    transform: scale(1.22);
+    box-shadow: 0 0 14px rgba(239, 68, 68, 1);
+  }
+}
+
+/* Horizontal Slider / Scrollable Track Utilities */
+.cm-slider-track {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  overscroll-behavior-x: contain;
+}
+
+.cm-slider-track::-webkit-scrollbar {
+  height: 3px;
+}
+
+.cm-slider-track::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 9999px;
+}
+
+.cm-slider-track::-webkit-scrollbar-thumb {
+  background: rgba(251, 191, 36, 0.45);
+  border-radius: 9999px;
+}
+
+.cm-slider-track::-webkit-scrollbar-thumb:hover {
+  background: rgba(251, 191, 36, 0.8);
+}
+
+/* Forced scrollable container styles when content exceeds viewport width */
+.cm-forced-scroll-container {
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior-x: contain !important;
+  touch-action: pan-x !important;
+  max-width: 100vw !important;
+}
+
+.cm-forced-scroll-container.is-overflowing {
+  scrollbar-width: thin;
+}
+
+/* Custom Leaflet MarkerCluster Styling - Translucent Neutral Sleek (Max 30px) */
+.cm-marker-cluster-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+.cm-cluster-bubble {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 700;
+  font-size: 11px;
+  background: rgba(30, 41, 59, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease, border-color 0.2s ease;
+  user-select: none;
+  cursor: pointer;
+  max-width: 30px !important;
+  max-height: 30px !important;
+}
+
+.cm-cluster-bubble:hover {
+  transform: scale(1.15);
+  background: rgba(51, 65, 85, 0.95);
+  color: #ffffff;
+  border-color: #fbbf24;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6), 0 0 0 2px rgba(251, 191, 36, 0.4);
+}
+
+.cm-cluster-tiny {
+  width: 22px;
+  height: 22px;
+  font-size: 10px;
+}
+
+.cm-cluster-small {
+  width: 25px;
+  height: 25px;
+  font-size: 10px;
+}
+
+.cm-cluster-medium {
+  width: 27px;
+  height: 27px;
+  font-size: 10px;
+}
+
+.cm-cluster-large {
+  width: 29px;
+  height: 29px;
+  font-size: 10.5px;
+}
+
+.cm-cluster-macro {
+  width: 30px;
+  height: 30px;
+  font-size: 11px;
+}
+
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0.9;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Bus Stop Marker Pins */
+.cm-custom-stop-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.cm-bus-stop-pin {
+  width: 14px;
+  height: 14px;
+  background-color: #0284c7;
+  border: 2px solid #ffffff;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+  cursor: pointer;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.cm-bus-stop-pin:hover {
+  transform: scale(1.3);
+  background-color: #38bdf8;
+}
+
+.cm-bus-stop-pin.cm-stop-selected {
+  width: 18px;
+  height: 18px;
+  background-color: #fbbf24;
+  border: 2.5px solid #000000;
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.4), 0 4px 10px rgba(0, 0, 0, 0.7);
+  transform: scale(1.2);
+}
+
+.cm-stop-dot {
+  width: 4px;
+  height: 4px;
+  background: #ffffff;
+  border-radius: 9999px;
+}
+
+.cm-stop-selected .cm-stop-dot {
+  background: #000000;
+}
+
+
+
