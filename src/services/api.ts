@@ -134,99 +134,93 @@ export const AREAS: Record<AreaFilter, AreaInfo> = {
   },
 };
 
-const CM_DIRECT_BASE = 'https://api.carrismetropolitana.pt/v2';
-const CM_PROXY_BASE = '/api/cmet';
+export const CM_DIRECT_BASE = 'https://api.carrismetropolitana.pt/v2';
+export const CM_PROXY_BASE = '/api/cmet';
+
+/**
+ * Resolves the base API URL for Carris Metropolitana services.
+ * Precedence:
+ * 1. import.meta.env.VITE_API_URL
+ * 2. import.meta.env.VITE_CM_API_URL
+ * 3. Official HTTPS Production API: "https://api.carrismetropolitana.pt/v2"
+ * 
+ * Enforces HTTPS protocol to eliminate Mixed Content security blocks in production.
+ */
+export function getApiBaseUrl(): string {
+  const envUrl = (import.meta as any)?.env?.VITE_API_URL || (import.meta as any)?.env?.VITE_CM_API_URL;
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '') {
+    let clean = envUrl.trim().replace(/\/$/, '');
+    // Force HTTPS if accidentally supplied with http:// on a remote host
+    if (clean.startsWith('http://') && !clean.includes('localhost') && !clean.includes('127.0.0.1')) {
+      clean = clean.replace('http://', 'https://');
+    }
+    return clean;
+  }
+  return CM_DIRECT_BASE;
+}
 
 /**
  * Universal JSON fetcher for Carris Metropolitana API.
- * Uses fast 3.5s timeout, Vite environment variable support, and no-cache headers.
+ * Uses fast 5s timeout, standard CORS-safe headers only (Accept: application/json),
+ * and cache-busting timestamp to prevent stale telemetry without triggering CORS preflight rejections.
  */
 export async function fetchCmApiJson<T>(path: string): Promise<T> {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   const separator = cleanPath.includes('?') ? '&' : '?';
   const liveUrl = `${cleanPath}${separator}_t=${Date.now()}`;
 
-  // Prioritize environment variable if defined (e.g. VITE_CM_API_URL or VITE_API_URL)
-  const envUrl = (import.meta as any)?.env?.VITE_CM_API_URL || (import.meta as any)?.env?.VITE_API_URL;
-  const directBase = envUrl ? envUrl.replace(/\/$/, '') : CM_DIRECT_BASE;
+  const base = getApiBaseUrl();
+  const directEndpoint = `${base}${liveUrl}`;
 
-  // In production (Cloudflare Pages, workers.dev, or remote HTTPS host),
-  // directly query the official HTTPS API to bypass static SPA index.html redirects
-  const isStaticOrCloudflare =
-    typeof window !== 'undefined' &&
-    (window.location.hostname.endsWith('pages.dev') ||
-      window.location.hostname.endsWith('workers.dev') ||
-      (window.location.protocol === 'https:' && !window.location.hostname.includes('localhost')));
-
-  if (isStaticOrCloudflare) {
-    try {
-      const directController = new AbortController();
-      const directTimeoutId = setTimeout(() => directController.abort(), 4000);
-
-      const directRes = await fetch(`${directBase}${liveUrl}`, {
-        signal: directController.signal,
-        headers: {
-          Accept: 'application/json',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-        },
-        cache: 'no-store',
-      });
-      clearTimeout(directTimeoutId);
-
-      const contentType = directRes.headers.get('content-type') || '';
-      if (directRes.ok && contentType.includes('application/json')) {
-        return (await directRes.json()) as T;
-      }
-    } catch {
-      // Continue to fallback
-    }
-  }
-
-  // 1. Try local proxy with strict JSON content-type verification (only for local dev server)
+  // Direct fetch with standard CORS-safe headers only (Accept: application/json)
+  // NEVER send custom headers like 'Cache-Control' or 'Pragma' which trigger CORS preflight rejection!
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    const res = await fetch(`${CM_PROXY_BASE}${liveUrl}`, {
+    const res = await fetch(directEndpoint, {
       signal: controller.signal,
       headers: {
         Accept: 'application/json',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        Pragma: 'no-cache',
       },
-      cache: 'no-store',
     });
     clearTimeout(timeoutId);
 
     const contentType = res.headers.get('content-type') || '';
-    // Must be application/json; reject text/html SPA index.html redirects
     if (res.ok && contentType.includes('application/json')) {
       return (await res.json()) as T;
     }
-  } catch {
-    // Proxy failure, fallback to direct
+  } catch (err: any) {
+    console.warn(`[API] Fetch directly to ${directEndpoint} failed:`, err?.message || err);
   }
 
-  // 2. Direct fetch fallback with fast 4s timeout
-  const directController = new AbortController();
-  const directTimeoutId = setTimeout(() => directController.abort(), 4000);
-
-  const directRes = await fetch(`${directBase}${liveUrl}`, {
-    signal: directController.signal,
-    headers: {
-      Accept: 'application/json',
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      Pragma: 'no-cache',
-    },
-    cache: 'no-store',
-  });
-  clearTimeout(directTimeoutId);
-
-  if (!directRes.ok) {
-    throw new Error(`Erro na API Carris Metropolitana (${directRes.status})`);
+  // Fallback 1: Local proxy /api/cmet (only on localhost development server)
+  if (typeof window !== 'undefined' && window.location.hostname.includes('localhost')) {
+    try {
+      const localProxyUrl = `${CM_PROXY_BASE}${liveUrl}`;
+      const localRes = await fetch(localProxyUrl, {
+        headers: { Accept: 'application/json' },
+      });
+      const cType = localRes.headers.get('content-type') || '';
+      if (localRes.ok && cType.includes('application/json')) {
+        return (await localRes.json()) as T;
+      }
+    } catch {}
   }
 
-  return (await directRes.json()) as T;
+  // Fallback 2: Official direct API if custom VITE_API_URL was used and failed
+  if (base !== CM_DIRECT_BASE) {
+    const officialEndpoint = `${CM_DIRECT_BASE}${liveUrl}`;
+    const fbRes = await fetch(officialEndpoint, {
+      headers: { Accept: 'application/json' },
+    });
+    const cType = fbRes.headers.get('content-type') || '';
+    if (fbRes.ok && cType.includes('application/json')) {
+      return (await fbRes.json()) as T;
+    }
+  }
+
+  throw new Error(`Não foi possível carregar dados da Carris Metropolitana`);
 }
 
 let cachedVehicles: Vehicle[] = [];
@@ -1598,10 +1592,16 @@ export function getEffectTranslation(effect: number | string): string {
 }
 
 export async function fetchCarrisAlerts(): Promise<ServiceAlert[]> {
-  const alertsUrl = 'https://gateway.carris.pt/gateway/gtfs/api/v2.11/GTFS/realtime/alerts';
+  const envAlerts = (import.meta as any)?.env?.VITE_CARRIS_ALERTS_URL;
+  let alertsUrl = envAlerts || 'https://gateway.carris.pt/gateway/gtfs/api/v2.11/GTFS/realtime/alerts';
+  if (alertsUrl.startsWith('http://') && !alertsUrl.includes('localhost')) {
+    alertsUrl = alertsUrl.replace('http://', 'https://');
+  }
   
   try {
-    const res = await fetch(alertsUrl);
+    const res = await fetch(alertsUrl, {
+      headers: { Accept: 'application/x-protobuf, */*' },
+    });
     if (!res.ok) {
       // O endpoint de alertas GTFS da Carris pode não estar publicado no gateway público
       return [];

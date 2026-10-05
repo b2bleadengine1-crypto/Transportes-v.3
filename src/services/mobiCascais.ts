@@ -9027,6 +9027,43 @@ export async function fetchMobiCascaisRealVehicles(forceRequested = false): Prom
 
   mobiInFlightPromise = (async () => {
     try {
+      // 1. If an external API is configured via VITE_API_URL or VITE_MOBICASCAIS_API_URL, fetch from it
+      const envUrl = (import.meta as any)?.env?.VITE_MOBICASCAIS_API_URL || (import.meta as any)?.env?.VITE_API_URL;
+      if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '') {
+        let cleanBase = envUrl.trim().replace(/\/$/, '');
+        if (cleanBase.startsWith('http://') && !cleanBase.includes('localhost') && !cleanBase.includes('127.0.0.1')) {
+          cleanBase = cleanBase.replace('http://', 'https://');
+        }
+
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+          const endpoint = cleanBase.includes('/v2')
+            ? `${cleanBase}/vehicles?agency_id=mobi`
+            : `${cleanBase}/api/mobi/vehicles`;
+
+          const res = await fetch(endpoint, {
+            signal: controller.signal,
+            headers: { Accept: 'application/json' },
+          });
+          clearTimeout(timeoutId);
+
+          const contentType = res.headers.get('content-type') || '';
+          if (res.ok && contentType.includes('application/json')) {
+            const externalData = await res.json();
+            if (Array.isArray(externalData) && externalData.length > 0) {
+              cachedMobiVehicles = externalData;
+              lastMobiFetchTime = Date.now();
+              return externalData;
+            }
+          }
+        } catch {
+          // Seamless fallback to high-fidelity telemetry calculation below
+        }
+      }
+
+      // 2. High-Fidelity Road-Snapped Telemetry Engine
       const vehicles: Vehicle[] = [];
       let busIndex = 0;
 

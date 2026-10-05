@@ -35,6 +35,11 @@ export interface TelemetryVehicle {
   timestamp: number;
 }
 
+export interface ExecutionContext {
+  waitUntil(promise: Promise<any>): void;
+  passThroughOnException?(): void;
+}
+
 export interface TriagedResponse {
   route_id: string;
   server_timestamp: number;
