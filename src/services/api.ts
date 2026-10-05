@@ -719,53 +719,45 @@ export async function fetchStopsMap(forceRefresh = false): Promise<Map<string, S
 
   stopsFetchPromise = (async () => {
     try {
-      // 1. Fetch live stops directly with aggressive cache-busting (?_t=timestamp + no-cache headers)
-      const base = getApiBaseUrl();
-      const timestamp = Date.now();
-      const liveEndpoint = `${base}/stops?_t=${timestamp}`;
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-      const res = await fetch(liveEndpoint, {
-        signal: controller.signal,
-        headers: {
-          Accept: 'application/json',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          Pragma: 'no-cache',
-        },
-      });
-      clearTimeout(timeoutId);
-
-      let rawStops: any[] = [];
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
-        rawStops = await res.json();
-      } else {
-        // Fallback to direct official endpoint with cache buster if proxy is unavailable
-        const directUrl = `https://api.carrismetropolitana.pt/v2/stops?_t=${timestamp}`;
-        const directRes = await fetch(directUrl, {
-          headers: {
-            Accept: 'application/json',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-          },
-        });
-        if (directRes.ok) {
-          rawStops = await directRes.json();
+      // 1. Paragens: tenta o proxy e, se falhar (erro, timeout ou resposta inválida), a API oficial.
+      // Sem cache-busting nem cabeçalhos no-cache: as paragens mudam raramente e assim o pedido
+      // direto à API é "simples" (sem preflight CORS) e pode aproveitar a cache HTTP.
+      const fetchJsonArray = async (url: string, timeoutMs: number): Promise<any[] | null> => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const r = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
+          const ct = r.headers.get('content-type') || '';
+          if (!r.ok || !ct.includes('application/json')) return null;
+          const data = await r.json();
+          return Array.isArray(data) ? data : null;
+        } catch {
+          return null;
+        } finally {
+          clearTimeout(timeoutId);
         }
-      }
+      };
+
+      const base = getApiBaseUrl();
+      const rawStops: any[] =
+        (await fetchJsonArray(`${base}/stops`, 8000)) ??
+        (await fetchJsonArray('https://api.carrismetropolitana.pt/v2/stops', 10000)) ??
+        [];
 
       const map = new Map<string, StopInfo>();
 
       if (Array.isArray(rawStops)) {
         for (const s of rawStops) {
-          if (s && s.id) {
+          const lat = Number(s?.lat);
+          const lon = Number(s?.lon);
+          // Ignora paragens sem coordenadas válidas (apareceriam no ponto 0,0, no Golfo da Guiné)
+          if (s && s.id && Number.isFinite(lat) && Number.isFinite(lon) && lat !== 0 && lon !== 0) {
             const linesList: string[] = Array.isArray(s.line_ids) ? s.line_ids : [];
             const item: StopInfo = {
               id: s.id,
               name: s.long_name || s.tts_name || s.short_name || `Paragem #${s.id}`,
-              lat: Number(s.lat) || 0,
-              lon: Number(s.lon) || 0,
+              lat,
+              lon,
               lines: linesList,
               line_ids: linesList,
               pattern_ids: s.pattern_ids || [],
