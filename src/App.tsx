@@ -23,8 +23,8 @@ import { SettingsModal } from './components/SettingsModal';
 import { LineSelectorModal } from './components/LineSelectorModal';
 import { LayerControlPanel } from './components/LayerControlPanel';
 import { ServiceAlertsModal } from './components/ServiceAlertsModal';
-import { FloatingSearchBar } from './components/FloatingSearchBar';
-import { FloatingActionButtons } from './components/FloatingActionButtons';
+import { ActiveLinesBar } from './components/ActiveLinesBar';
+import { BubbleMenu } from './components/BubbleMenu';
 import { BottomSheet } from './components/BottomSheet';
 import { MetroStationDrawer } from './components/MetroStationDrawer';
 import { FertagusStationDrawer } from './components/FertagusStationDrawer';
@@ -1229,60 +1229,33 @@ export default function App() {
   }, [searchQuery]);
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-slate-950 font-sans select-none">
-      {/* 1. Floating Google Maps Style Search Bar + Chips Row (escondido quando sidebar ou outros menus estão abertos) */}
+    <div className="relative w-screen h-dvh overflow-hidden bg-slate-950 font-sans select-none">
+      {/* 1. Linhas escolhidas (só aparece quando há alguma linha ativa) */}
       {!isSidebarOpen && activeSheet === 'none' && !isSettingsModalOpen && !isLineSelectorOpen && !isAboutModalOpen && !isAlertsModalOpen && !isFavoritesModalOpen && (
-        <FloatingSearchBar
-          onOpenMenu={() => setActiveSheet('menu')}
-          onOpenSearch={(query) => {
-            if (query) setSearchQuery(query);
-            setActiveSheet('search');
-          }}
-          onOpenAlerts={() => setActiveSheet('alerts')}
-          onOpenFavorites={() => setIsFavoritesModalOpen(true)}
-          onOpenBoat={() => {
-            setSearchQuery('barco');
-            setActiveSheet('search');
-          }}
-          onOpenMST={() => {
-            setSearchQuery('mst');
-            setActiveSheet('search');
-          }}
-          onOpenMetro={() => {
-            setSearchQuery('metro');
-            setActiveSheet('search');
-          }}
-          alertsCount={alerts.length}
-          pinnedAlertsCount={pinnedAlertsCount}
+        <ActiveLinesBar
           activeLines={activeLines}
           linesMap={linesMap}
           onRemoveLine={handleRemoveActiveLine}
-          onAddLine={() => setActiveSheet('search')}
-          onOpenLineSelector={handleOpenLineSelector}
-          showAllVehicles={showAllVehicles}
-          onToggleShowAll={() => handleSetShowAllVehicles(!showAllVehicles)}
-          totalBusesCount={allVehicles.length}
-          filteredBusesCount={filteredVehicles.length}
-          searchQuery={searchQuery}
-          onClearSearch={() => setSearchQuery('')}
           currentDirectionLabel={currentDirectionLabel}
           onOpenDirectionModal={() => setIsDirectionModalOpen(true)}
         />
       )}
 
-      {/* 2. Floating Action Buttons (Bottom Right): Camadas, GPS, Refresh (escondido quando sidebar, drawers ou sheets estão abertos) */}
+      {/* 2. Menu flutuante (bolha) no canto inferior direito: substitui a barra de pesquisa e os botões antigos */}
       {!isSidebarOpen && activeSheet === 'none' && !isFavoritesModalOpen && selectedVehicleId === null && selectedStopId === null && selectedMetroStation === null && selectedFertagusStation === null && selectedCpStation === null && selectedCpTrain === null && selectedBoatStation === null && selectedMSTStation === null && (
-        <FloatingActionButtons
-          onLocateUser={handleLocateUser}
+        <BubbleMenu
+          onSearch={() => setActiveSheet('search')}
+          onFavorites={() => setIsFavoritesModalOpen(true)}
+          onAlerts={() => setActiveSheet('alerts')}
+          alertsCount={alerts.length}
+          onLocate={handleLocateUser}
           isLocating={isLocating}
           isLiveTracking={isLiveTrackingUser}
           followUser={followUser}
-          onOpenLayers={() => setActiveSheet('layers')}
-          onManualRefresh={() => loadVehicles(false)}
+          onRefresh={() => loadVehicles(false)}
           isRefreshing={isRefreshing}
-          secondsUntilRefresh={secondsUntilRefresh}
-          baseRefreshInterval={baseRefreshInterval}
-          onCycleRefreshInterval={handleCycleRefreshInterval}
+          onLayers={() => setActiveSheet('layers')}
+          onMore={() => setActiveSheet('menu')}
         />
       )}
 
@@ -1629,7 +1602,25 @@ export default function App() {
             )}
           </div>
 
-          {/* Estado Inicial sem texto: Sem sugestões predefinidas */}
+          {/* Atalhos rápidos (vieram da antiga barra de pesquisa do topo) */}
+          {!searchQuery.trim() && (
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => setSearchQuery('metro')} className="px-3.5 py-2 rounded-full text-sm font-bold flex items-center gap-1.5 bg-slate-800 text-white border-2 border-slate-600 hover:border-amber-400 cursor-pointer">
+                <Train className="w-4 h-4 text-amber-400" />
+                <span>Metro</span>
+              </button>
+              <button type="button" onClick={() => setSearchQuery('barco')} className="px-3.5 py-2 rounded-full text-sm font-bold flex items-center gap-1.5 bg-slate-800 text-white border-2 border-slate-600 hover:border-amber-400 cursor-pointer">
+                <Ship className="w-4 h-4 text-sky-400" />
+                <span>Barcos</span>
+              </button>
+              <button type="button" onClick={() => setSearchQuery('mst')} className="px-3.5 py-2 rounded-full text-sm font-bold flex items-center gap-1.5 bg-slate-800 text-white border-2 border-slate-600 hover:border-amber-400 cursor-pointer">
+                <Train className="w-4 h-4 text-emerald-400" />
+                <span>Metro Sul do Tejo</span>
+              </button>
+            </div>
+          )}
+
+          {/* Estado Inicial sem texto */}
           {!searchQuery.trim() && (
             <div className="py-10 text-center text-slate-400 space-y-2">
               <div className="w-12 h-12 rounded-2xl bg-slate-800/80 border border-slate-700/60 mx-auto flex items-center justify-center text-amber-400 shadow-md">

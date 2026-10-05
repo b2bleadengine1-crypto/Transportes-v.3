@@ -288,12 +288,7 @@ export const MapComponent: React.FC<MapComponentProps> = ({
       markerZoomAnimation: true,
     });
 
-    // Add zoom control at bottom right for ergonomic desktop/mobile reach
-    L.control
-      .zoom({
-        position: 'bottomright',
-      })
-      .addTo(initialMap);
+    // Sem botões +/- nativos: o zoom faz-se com os dedos e a navegação está no BubbleMenu.
 
     // Create a stable shared canvas renderer for vectors and markers
     const canvasRenderer = L.canvas({ padding: 0.5 }).addTo(initialMap);
