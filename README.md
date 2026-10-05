@@ -74,7 +74,7 @@ npm run lint
 │   ├── icon.svg
 │   ├── pwa-192x192.png
 │   ├── pwa-512x512.png
-│   └── transporaml-project.zip # Arquivo completo do projeto
+│   └── routes.json
 └── src/
     ├── App.tsx                # Componente principal e orquestração de estado
     ├── main.tsx               # Montagem React no DOM
