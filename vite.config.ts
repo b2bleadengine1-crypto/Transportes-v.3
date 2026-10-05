@@ -617,6 +617,21 @@ export default defineConfig(() => {
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
       proxy: {
+        '/api/metropolitana': {
+          target: 'https://api.carrismetropolitana.pt/v2',
+          changeOrigin: true,
+          rewrite: (pathStr) => pathStr.replace(/^\/api\/metropolitana/, ''),
+          secure: true,
+          timeout: 8000,
+          configure: (proxy) => {
+            proxy.on('error', (_err, _req, res) => {
+              if (res && 'writeHead' in res && !(res as any).headersSent) {
+                (res as any).writeHead(502, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Proxy timeout', fallback: true }));
+              }
+            });
+          },
+        },
         '/api/cmet': {
           target: 'https://api.carrismetropolitana.pt/v2',
           changeOrigin: true,

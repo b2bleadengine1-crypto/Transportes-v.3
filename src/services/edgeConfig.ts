@@ -114,10 +114,24 @@ export async function fetchRouteTelemetry(targetRoute: string): Promise<any> {
     clearTimeout(timeoutId);
     console.warn(`[EdgeTelemetry] Primary route fetch failed for ${targetRoute}:`, err.message);
 
-    // Upstream Direct Fallback for Carris Metropolitana
+    // Upstream Direct Fallback for Carris Metropolitana via Cloudflare Pages Function proxy
     if (!targetRoute.startsWith('M') && targetRoute !== '753') {
-      const fallbackUrl = `https://api.carrismetropolitana.pt/v2/vehicles?line_id=${encodeURIComponent(targetRoute)}`;
-      const fbRes = await fetch(fallbackUrl, { cache: 'no-store' });
+      const proxyUrl = `/api/metropolitana/vehicles?line_id=${encodeURIComponent(targetRoute)}`;
+      try {
+        const pRes = await fetch(proxyUrl, { cache: 'no-store' });
+        if (pRes.ok) {
+          const list = await pRes.json();
+          return {
+            route_id: targetRoute,
+            vehicle_count: Array.isArray(list) ? list.length : 0,
+            vehicles: list,
+            source: 'proxy_fallback',
+          };
+        }
+      } catch {}
+
+      const directUrl = `https://api.carrismetropolitana.pt/v2/vehicles?line_id=${encodeURIComponent(targetRoute)}`;
+      const fbRes = await fetch(directUrl, { cache: 'no-store' });
       if (fbRes.ok) {
         const list = await fbRes.json();
         return {

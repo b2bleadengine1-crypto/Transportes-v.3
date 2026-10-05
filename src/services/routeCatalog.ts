@@ -265,17 +265,25 @@ export async function loadRouteCatalog(): Promise<Map<string, Line>> {
     // Runs in the background without blocking the UI
     setTimeout(async () => {
       try {
-        const liveApiUrl = 'https://api.carrismetropolitana.pt/v2/lines';
+        const proxyApiUrl = '/api/metropolitana/lines';
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-        const res = await fetch(liveApiUrl, {
+        let res = await fetch(proxyApiUrl, {
           signal: controller.signal,
           headers: { Accept: 'application/json' },
-        });
+        }).catch(() => null);
+
+        if (!res || !res.ok) {
+          const directApiUrl = 'https://api.carrismetropolitana.pt/v2/lines';
+          res = await fetch(directApiUrl, {
+            signal: controller.signal,
+            headers: { Accept: 'application/json' },
+          }).catch(() => null);
+        }
         clearTimeout(timeoutId);
 
-        if (res.ok) {
+        if (res && res.ok) {
           const liveJson = await res.json();
           if (Array.isArray(liveJson) && liveJson.length > resolvedLines.length) {
             const updatedMap = buildUnifiedLinesMap(liveJson);

@@ -145,16 +145,15 @@ export const AREAS: Record<AreaFilter, AreaInfo> = {
 };
 
 export const CM_DIRECT_BASE = 'https://api.carrismetropolitana.pt/v2';
+export const CM_CLOUDFLARE_PROXY_BASE = '/api/metropolitana';
 export const CM_PROXY_BASE = '/api/cmet';
 
 /**
  * Resolves the base API URL for Carris Metropolitana services.
  * Precedence:
- * 1. import.meta.env.VITE_API_URL
- * 2. import.meta.env.VITE_CM_API_URL
- * 3. Official HTTPS Production API: "https://api.carrismetropolitana.pt/v2"
- * 
- * Enforces HTTPS protocol to eliminate Mixed Content security blocks in production.
+ * 1. import.meta.env.VITE_API_URL / VITE_CM_API_URL (custom edge worker or mock endpoint)
+ * 2. Cloudflare Pages Function Proxy: "/api/metropolitana" (Same-Origin, Zero CORS block)
+ * 3. Fallback: Direct HTTPS API
  */
 export function getApiBaseUrl(): string {
   const envUrl = (import.meta as any)?.env?.VITE_API_URL || (import.meta as any)?.env?.VITE_CM_API_URL;
@@ -166,13 +165,14 @@ export function getApiBaseUrl(): string {
     }
     return clean;
   }
-  return CM_DIRECT_BASE;
+  // Default to the same-origin Cloudflare Pages Function proxy (/api/metropolitana)
+  return CM_CLOUDFLARE_PROXY_BASE;
 }
 
 /**
  * Universal JSON fetcher for Carris Metropolitana API.
- * Uses fast 5s timeout, standard CORS-safe headers only (Accept: application/json),
- * and cache-busting timestamp to prevent stale telemetry without triggering CORS preflight rejections.
+ * Uses the Cloudflare Pages Function proxy (/api/metropolitana) to bypass browser CORS blocks,
+ * with fallbacks to local dev proxy and direct endpoint.
  */
 export async function fetchCmApiJson<T>(path: string): Promise<T> {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
@@ -180,15 +180,14 @@ export async function fetchCmApiJson<T>(path: string): Promise<T> {
   const liveUrl = `${cleanPath}${separator}_t=${Date.now()}`;
 
   const base = getApiBaseUrl();
-  const directEndpoint = `${base}${liveUrl}`;
+  const primaryEndpoint = `${base}${liveUrl}`;
 
-  // Direct fetch with standard CORS-safe headers only (Accept: application/json)
-  // NEVER send custom headers like 'Cache-Control' or 'Pragma' which trigger CORS preflight rejection!
+  // 1. Primary Request (Cloudflare Pages Function /api/metropolitana or VITE_API_URL)
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-    const res = await fetch(directEndpoint, {
+    const res = await fetch(primaryEndpoint, {
       signal: controller.signal,
       headers: {
         Accept: 'application/json',
@@ -201,11 +200,11 @@ export async function fetchCmApiJson<T>(path: string): Promise<T> {
       return (await res.json()) as T;
     }
   } catch (err: any) {
-    console.warn(`[API] Fetch directly to ${directEndpoint} failed:`, err?.message || err);
+    console.warn(`[API] Fetch to primary endpoint ${primaryEndpoint} failed:`, err?.message || err);
   }
 
-  // Fallback 1: Local proxy /api/cmet (only on localhost development server)
-  if (typeof window !== 'undefined' && window.location.hostname.includes('localhost')) {
+  // 2. Fallback: Local dev proxy /api/cmet
+  if (base !== CM_PROXY_BASE) {
     try {
       const localProxyUrl = `${CM_PROXY_BASE}${liveUrl}`;
       const localRes = await fetch(localProxyUrl, {
@@ -218,16 +217,18 @@ export async function fetchCmApiJson<T>(path: string): Promise<T> {
     } catch {}
   }
 
-  // Fallback 2: Official direct API if custom VITE_API_URL was used and failed
+  // 3. Fallback: Direct fetch to official Carris Metropolitana API
   if (base !== CM_DIRECT_BASE) {
-    const officialEndpoint = `${CM_DIRECT_BASE}${liveUrl}`;
-    const fbRes = await fetch(officialEndpoint, {
-      headers: { Accept: 'application/json' },
-    });
-    const cType = fbRes.headers.get('content-type') || '';
-    if (fbRes.ok && cType.includes('application/json')) {
-      return (await fbRes.json()) as T;
-    }
+    try {
+      const officialEndpoint = `${CM_DIRECT_BASE}${liveUrl}`;
+      const fbRes = await fetch(officialEndpoint, {
+        headers: { Accept: 'application/json' },
+      });
+      const cType = fbRes.headers.get('content-type') || '';
+      if (fbRes.ok && cType.includes('application/json')) {
+        return (await fbRes.json()) as T;
+      }
+    } catch {}
   }
 
   throw new Error(`Não foi possível carregar dados da Carris Metropolitana`);
