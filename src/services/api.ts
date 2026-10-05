@@ -30,8 +30,16 @@ import {
   setCpRequested,
 } from './cpTrains';
 import { fetchRoadSnappedRoute } from './roadRouting';
+import {
+  resolveTelemetryUrl,
+  isPlaceholderOrInvalidUrl,
+  fetchRouteTelemetry,
+} from './edgeConfig';
 
 export {
+  resolveTelemetryUrl,
+  isPlaceholderOrInvalidUrl,
+  fetchRouteTelemetry,
   setMobiCascaisRequested,
   getMobiCascaisRequested,
   setCpRequested,
@@ -131,14 +139,50 @@ const CM_PROXY_BASE = '/api/cmet';
 
 /**
  * Universal JSON fetcher for Carris Metropolitana API.
- * Uses fast 3.5s timeout and no-cache headers to eliminate delays and stale GPS data.
+ * Uses fast 3.5s timeout, Vite environment variable support, and no-cache headers.
  */
 export async function fetchCmApiJson<T>(path: string): Promise<T> {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   const separator = cleanPath.includes('?') ? '&' : '?';
   const liveUrl = `${cleanPath}${separator}_t=${Date.now()}`;
 
-  // 1. Try local proxy
+  // Prioritize environment variable if defined (e.g. VITE_CM_API_URL or VITE_API_URL)
+  const envUrl = (import.meta as any)?.env?.VITE_CM_API_URL || (import.meta as any)?.env?.VITE_API_URL;
+  const directBase = envUrl ? envUrl.replace(/\/$/, '') : CM_DIRECT_BASE;
+
+  // In production (Cloudflare Pages, workers.dev, or remote HTTPS host),
+  // directly query the official HTTPS API to bypass static SPA index.html redirects
+  const isStaticOrCloudflare =
+    typeof window !== 'undefined' &&
+    (window.location.hostname.endsWith('pages.dev') ||
+      window.location.hostname.endsWith('workers.dev') ||
+      (window.location.protocol === 'https:' && !window.location.hostname.includes('localhost')));
+
+  if (isStaticOrCloudflare) {
+    try {
+      const directController = new AbortController();
+      const directTimeoutId = setTimeout(() => directController.abort(), 4000);
+
+      const directRes = await fetch(`${directBase}${liveUrl}`, {
+        signal: directController.signal,
+        headers: {
+          Accept: 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+        },
+        cache: 'no-store',
+      });
+      clearTimeout(directTimeoutId);
+
+      const contentType = directRes.headers.get('content-type') || '';
+      if (directRes.ok && contentType.includes('application/json')) {
+        return (await directRes.json()) as T;
+      }
+    } catch {
+      // Continue to fallback
+    }
+  }
+
+  // 1. Try local proxy with strict JSON content-type verification (only for local dev server)
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3500);
@@ -154,18 +198,20 @@ export async function fetchCmApiJson<T>(path: string): Promise<T> {
     });
     clearTimeout(timeoutId);
 
-    if (res.ok) {
+    const contentType = res.headers.get('content-type') || '';
+    // Must be application/json; reject text/html SPA index.html redirects
+    if (res.ok && contentType.includes('application/json')) {
       return (await res.json()) as T;
     }
   } catch {
     // Proxy failure, fallback to direct
   }
 
-  // 2. Direct fetch fallback with fast 3.5s timeout
+  // 2. Direct fetch fallback with fast 4s timeout
   const directController = new AbortController();
-  const directTimeoutId = setTimeout(() => directController.abort(), 3500);
+  const directTimeoutId = setTimeout(() => directController.abort(), 4000);
 
-  const directRes = await fetch(`${CM_DIRECT_BASE}${liveUrl}`, {
+  const directRes = await fetch(`${directBase}${liveUrl}`, {
     signal: directController.signal,
     headers: {
       Accept: 'application/json',
@@ -221,16 +267,22 @@ export async function fetchCarrisRealVehicles(): Promise<Vehicle[]> {
   }
 
   carrisInFlightPromise = (async () => {
-    const endpoints = [
-      `/api/carris-gtfs?_t=${Date.now()}`,
-      `https://gateway.carris.pt/gateway/gtfs/api/v2.11/GTFS/realtime/vehiclepositions?_t=${Date.now()}`,
-    ];
+    const envCarris = (import.meta as any)?.env?.VITE_CARRIS_API_URL;
+    const directOfficialCarris = 'https://gateway.carris.pt/gateway/gtfs/api/v2.11/GTFS/realtime/vehiclepositions';
+
+    // Prioritize direct official HTTPS endpoint in production to avoid static SPA index.html redirects
+    const endpoints = envCarris
+      ? [envCarris, directOfficialCarris]
+      : [
+          directOfficialCarris,
+          `/api/carris-gtfs?_t=${Date.now()}`,
+        ];
 
     let buffer: ArrayBuffer | null = null;
     for (const url of endpoints) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
 
         const res = await fetch(url, {
           signal: controller.signal,
@@ -240,6 +292,11 @@ export async function fetchCarrisRealVehicles(): Promise<Vehicle[]> {
         clearTimeout(timeoutId);
 
         if (res.ok) {
+          const contentType = res.headers.get('content-type') || '';
+          // CRITICAL: Reject text/html (SPA index.html false-positive on Cloudflare Pages)
+          if (contentType.includes('text/html')) {
+            continue;
+          }
           const ab = await res.arrayBuffer();
           if (ab && ab.byteLength > 100) {
             buffer = ab;

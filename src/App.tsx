@@ -107,8 +107,14 @@ export default function App() {
     return [];
   });
 
-  // Sinal dos autocarros desligado por defeito: só aparecem quando o utilizador selecionar carreiras
-  const [showAllVehicles, setShowAllVehicles] = useState<boolean>(false);
+  // Sinal dos autocarros: ativo por defeito para apresentar autocarros em tempo real no arranque
+  const [showAllVehicles, setShowAllVehicles] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('cm_show_all_vehicles');
+      if (saved !== null) return saved === 'true';
+    } catch {}
+    return true;
+  });
 
   // Layer control state (bus stops, route lines, traffic congestion heatmap, mobicascais)
   const [mapLayers, setMapLayers] = useState<MapLayersConfig>(() => {
