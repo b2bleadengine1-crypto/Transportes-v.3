@@ -15,3 +15,4 @@ Retomar noutra sessão: `git checkout ui-bubble-cleanup`, ver a coluna Estado.
 ## Em aberto
 - Proxy `/api/metropolitana`: está em `functions/` (Cloudflare **Pages** Functions). O site está em `*.workers.dev` (Cloudflare **Workers**), onde `functions/` não corre. A app cai para a API oficial (verificado no browser), por isso funciona, mas o proxy pode não estar ativo. Confirmar no painel Cloudflare se o projeto é Pages ou Worker.
 - `FloatingSearchBar.tsx`, `FloatingActionButtons.tsx` e `TopNav.tsx` deixaram de ser usados; ficam no repositório para poder voltar atrás. Apagar quando a bolha estiver aprovada.
+- Deploy: o push do ramo `ui-bubble-cleanup` disparou o Cloudflare Workers Builds e **falhou** (build ca28870f). O `main` passa. Localmente o build passa com npm e com bun, por isso a falha deve estar no passo de deploy do Cloudflare (wrangler) e não na compilação. Falta ver o log no painel Cloudflare.
